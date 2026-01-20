@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Quantum Factory Tycoon — Neural Interface</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#05070f">
+
+<!-- =========================================================
+  QUANTUM FACTORY TYCOON
+  DESIGN: NEURAL INDUSTRIAL INTERFACE
+  STYLE: FUTURISTE / SCI-FI TYCOON / HOLOGRAPHIC HUD
+========================================================= -->
+
+<style>
+/* =========================================================
+   === RESET & BASE ========================================
+========================================================= */
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background:#05070f;
+  color:#e8faff;
+}
+
+/* =========================================================
+   === BACKGROUND NEBULA ===================================
+========================================================= */
+body::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(0,255,255,0.08), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(120,0,255,0.08), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.9), #02030a 80%);
+  z-index:-2;
+}
+
+/* =========================================================
+   === CANVAS ==============================================
+========================================================= */
+#gameCanvas {
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+}
+
+/* =========================================================
+   === HOLOGRAPHIC HUD PANELS ===============================
+========================================================= */
+.hud {
+  position:fixed;
+  padding:10px 14px;
+  border-radius:14px;
+  background: linear-gradient(
+    145deg,
+    rgba(0,255,255,0.08),
+    rgba(0,100,255,0.02)
+  );
+  backdrop-filter: blur(18px);
+  border:1px solid rgba(0,255,255,0.25);
+  box-shadow:
+    0 0 20px rgba(0,255,255,0.15),
+    inset 0 0 20px rgba(255,255,255,0.03);
+  font-size:13px;
+  letter-spacing:0.5px;
+}
+
+#hudTL { top:12px; left:12px; }
+#hudTR { top:12px; right:12px; text-align:right; }
+#hudBL { bottom:12px; left:12px; }
+#hudBR { bottom:12px; right:12px; }
+
+/* =========================================================
+   === HUD TEXT STYLES =====================================
+========================================================= */
+.hud .label {
+  font-size:10px;
+  opacity:0.6;
+}
+.hud .value {
+  font-size:16px;
+  font-weight:600;
+  color:#7ffcff;
+}
+
+/* =========================================================
+   === GLOW ANIMATION ======================================
+========================================================= */
+@keyframes pulse {
+  0% { box-shadow:0 0 10px rgba(0,255,255,0.2); }
+  50% { box-shadow:0 0 24px rgba(0,255,255,0.4); }
+  100% { box-shadow:0 0 10px rgba(0,255,255,0.2); }
+}
+.hud { animation:pulse 6s infinite; }
+
+</style>
+</head>
+
+<body>
+
+<!-- ================= CANVAS ================= -->
+<canvas id="gameCanvas"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hudTL" class="hud">
+  <div class="label">RESSOURCES</div>
+  <div class="value">🧱 <span id="matter">0</span></div>
+  <div class="value">⚡ <span id="energy">0</span></div>
+</div>
+
+<div id="hudTR" class="hud">
+  <div class="label">PROGRESSION</div>
+  <div class="value">NIV <span id="level">1</span></div>
+</div>
+
+<div id="hudBL" class="hud">
+  <div class="label">SYSTÈME</div>
+  <div class="value">⏱ <span id="time">0</span>s</div>
+</div>
+
+<div id="hudBR" class="hud">
+  <div class="label">ENTROPIE</div>
+  <div class="value">🌪 <span id="entropy">0</span>%</div>
+</div>
+
+<script>
+/* =========================================================
+   === CORE ENGINE =========================================
+========================================================= */
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* =========================================================
+   === GAME DATA ===========================================
+========================================================= */
+
+const GRID_SIZE = 12;
+const CELL = 56;
+
+const RES = {
+  matter: { total:0, rate:0 },
+  energy: { total:0, rate:0 },
+  entropy: { value:0 }
+};
+
+const MACHINES = {
+  extractor:{ prod:{matter:1}, color:"#00ffff" },
+  generator:{ prod:{energy:2}, color:"#ffcc00" }
+};
+
+const game = {
+  grid: Array(GRID_SIZE*GRID_SIZE).fill(null),
+  level:1,
+  time:0,
+  last:performance.now()
+};
+
+/* =========================================================
+   === INPUT ===============================================
+========================================================= */
+canvas.addEventListener("click", e=>{
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX-r.left)/CELL);
+  const y = Math.floor((e.clientY-r.top)/CELL);
+  const i = y*GRID_SIZE+x;
+  if(!game.grid[i]) game.grid[i]={type:"extractor"};
+});
+
+/* =========================================================
+   === SIMULATION ==========================================
+========================================================= */
+function update(dt){
+  RES.matter.rate=0;
+  RES.energy.rate=0;
+
+  game.grid.forEach(c=>{
+    if(!c) return;
+    const m=MACHINES[c.type];
+    if(m.prod.matter) RES.matter.rate+=m.prod.matter;
+    if(m.prod.energy) RES.energy.rate+=m.prod.energy;
+  });
+
+  RES.matter.total+=RES.matter.rate*dt;
+  RES.energy.total+=RES.energy.rate*dt;
+  RES.entropy.value=Math.min(100,RES.entropy.value+dt*game.grid.filter(Boolean).length*0.05);
+}
+
+/* =========================================================
+   === RENDER ==============================================
+========================================================= */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // subtle grid
+  ctx.strokeStyle="rgba(255,255,255,0.03)";
+  for(let i=0;i<=GRID_SIZE;i++){
+    ctx.beginPath();
+    ctx.moveTo(i*CELL,0);
+    ctx.lineTo(i*CELL,GRID_SIZE*CELL);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0,i*CELL);
+    ctx.lineTo(GRID_SIZE*CELL,i*CELL);
+    ctx.stroke();
+  }
+
+  // machines
+  game.grid.forEach((c,i)=>{
+    if(!c) return;
+    const x=i%GRID_SIZE;
+    const y=Math.floor(i/GRID_SIZE);
+    ctx.fillStyle=MACHINES[c.type].color;
+    ctx.shadowColor=MACHINES[c.type].color;
+    ctx.shadowBlur=20;
+    ctx.fillRect(
+      x*CELL+10,
+      y*CELL+10,
+      CELL-20,
+      CELL-20
+    );
+    ctx.shadowBlur=0;
+  });
+}
+
+/* =========================================================
+   === UI UPDATE ===========================================
+========================================================= */
+function ui(){
+  matter.textContent=RES.matter.total.toFixed(1);
+  energy.textContent=RES.energy.total.toFixed(1);
+  entropy.textContent=RES.entropy.value.toFixed(0);
+  level.textContent=game.level;
+  time.textContent=Math.floor(game.time);
+}
+
+/* =========================================================
+   === MAIN LOOP ===========================================
+========================================================= */
+function loop(now){
+  const dt=(now-game.last)/1000;
+  game.last=now;
+  game.time+=dt;
+  update(dt);
+  draw();
+  ui();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
